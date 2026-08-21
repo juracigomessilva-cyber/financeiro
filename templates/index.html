@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Controle Financeiro - Lançamentos</title>
+    <style>
+        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { margin: 0; padding: 20px; background-color: #f4f6f8; display: flex; gap: 20px; height: 100vh; }
+        
+        /* Formulário de Lançamento */
+        .painel-form { flex: 1; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .tipo-selector { display: flex; gap: 10px; margin-bottom: 20px; }
+        .btn-tipo { flex: 1; padding: 15px; border: 2px solid #ccc; background: #f8f9fa; cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 16px; text-align: center; }
+        .btn-tipo.active-receita { background: #27ae60; color: white; border-color: #27ae60; }
+        .btn-tipo.active-despesa { background: #c0392b; color: white; border-color: #c0392b; }
+        
+        label { font-weight: bold; font-size: 14px; margin-top: 10px; display: block; color: #34495e; }
+        input, select { width: 100%; padding: 10px; font-size: 16px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; }
+        .btn-salvar { background: #2c3e50; color: white; border: none; padding: 15px; font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 20px; width: 100%; }
+
+        /* Lista e Resumo */
+        .painel-lista { flex: 1.5; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .topo-acoes { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn-relatorio { background: #8e44ad; color: white; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; }
+        
+        .tabela-container { flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; font-size: 14px; }
+        th { background-color: #f8f9fa; color: #2c3e50; }
+        
+        .val-receita { color: #27ae60; font-weight: bold; }
+        .val-despesa { color: #c0392b; font-weight: bold; }
+        .btn-del { color: #e74c3c; cursor: pointer; font-weight: bold; border: none; background: none; }
+    </style>
+</head>
+<body>
+
+    <div class="painel-form">
+        <h2>Novo Lançamento</h2>
+        
+        <div class="tipo-selector">
+            <div id="btn-receita" class="btn-tipo active-receita" onclick="setTipo('Receita')">+ RECEITA (Entrada)</div>
+            <div id="btn-despesa" class="btn-tipo" onclick="setTipo('Despesa')">- DESPESA (Saída)</div>
+        </div>
+
+        <label>Data:</label>
+        <input type="date" id="data">
+
+        <label>Descrição:</label>
+        <input type="text" id="descricao" placeholder="Ex: Pagamento Cliente / Mercado">
+
+        <label>Categoria:</label>
+        <select id="categoria"></select>
+
+        <label>Valor (R$):</label>
+        <input type="number" step="0.01" id="valor" placeholder="0,00">
+
+        <label>Forma de Pagamento / Canal:</label>
+        <select id="forma-pagamento">
+            <option value="Pix">Pix</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Cartão de Débito">Cartão de Débito</option>
+            <option value="Cartão de Crédito">Cartão de Crédito</option>
+            <option value="Boleto / Transferência">Boleto / Transferência</option>
+        </select>
+
+        <button class="btn-salvar" onclick="salvarLancamento()">REGISTRAR TRANSAÇÃO</button>
+    </div>
+
+    <div class="painel-lista">
+        <div class="topo-acoes">
+            <h2>Lançamentos Recentes</h2>
+            <a href="/relatorios" class="btn-relatorio">📊 Ver Relatórios e Balanço</a>
+        </div>
+
+        <div class="tabela-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th>Categoria</th>
+                        <th>Valor</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-recentes"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let tipoAtual = 'Receita';
+        let categorias = [];
+
+        // Define data de hoje no input
+        document.getElementById('data').valueAsDate = new Date();
+
+        function setTipo(tipo) {
+            tipoAtual = tipo;
+            document.getElementById('btn-receita').className = tipo === 'Receita' ? 'btn-tipo active-receita' : 'btn-tipo';
+            document.getElementById('btn-despesa').className = tipo === 'Despesa' ? 'btn-tipo active-despesa' : 'btn-tipo';
+            atualizarSelectCategorias();
+        }
+
+        async function carregarCategorias() {
+            const res = await fetch('/api/categorias');
+            categorias = await res.json();
+            atualizarSelectCategorias();
+        }
+
+        function atualizarSelectCategorias() {
+            const select = document.getElementById('categoria');
+            select.innerHTML = '';
+            const filtradas = categorias.filter(c => c.tipo === tipoAtual);
+            filtradas.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.nome;
+                opt.textContent = c.nome;
+                select.appendChild(opt);
+            });
+        }
+
+        async function salvarLancamento() {
+            const data = document.getElementById('data').value;
+            const descricao = document.getElementById('descricao').value.trim();
+            const categoria = document.getElementById('categoria').value;
+            const valor = parseFloat(document.getElementById('valor').value);
+            const forma = document.getElementById('forma-pagamento').value;
+
+            if (!data || !descricao || isNaN(valor) || valor <= 0) {
+                alert('Preencha todos os campos corretamente!');
+                return;
+            }
+
+            const payload = { data, tipo: tipoAtual, descricao, categoria, valor, forma_pagamento: forma };
+
+            const res = await fetch('/api/transacoes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                document.getElementById('descricao').value = '';
+                document.getElementById('valor').value = '';
+                carregarRecentes();
+            }
+        }
+
+        async function carregarRecentes() {
+            const res = await fetch('/api/relatorio?periodo=dia');
+            const data = await res.json();
+            const tbody = document.getElementById('tabela-recentes');
+            tbody.innerHTML = '';
+
+            data.detalhado.forEach(item => {
+                const tr = document.createElement('tr');
+                const sinal = item.tipo === 'Receita' ? '+' : '-';
+                const classeVal = item.tipo === 'Receita' ? 'val-receita' : 'val-despesa';
+
+                tr.innerHTML = `
+                    <td>${item.data}</td>
+                    <td>${item.descricao}</td>
+                    <td><small>${item.categoria}</small></td>
+                    <td class="${classeVal}">${sinal} R$ ${item.valor.toFixed(2)}</td>
+                    <td><button class="btn-del" onclick="excluirItem(${item.id})">X</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function excluirItem(id) {
+            if (confirm('Deseja realmente apagar este lançamento?')) {
+                await fetch(`/api/transacoes/${id}`, { method: 'DELETE' });
+                carregarRecentes();
+            }
+        }
+
+        carregarCategorias();
+        carregarRecentes();
+    </script>
+</body>
+</html>
