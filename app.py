@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.secret_key = 'chave_secreta_financeiro_segura'
 
 # DEFINA A SUA SENHA AQUI
-SENHA_CORRETA = "admin123"
+SENHA_CORRETA = "Kadu@2304J3682Siriema"
 
 # --- DECORADOR DE PROTEÇÃO DE ROTAS ---
 def login_required(f):
