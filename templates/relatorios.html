@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle Financeiro</title>
+    <title>Relatórios Financeiros</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
@@ -11,177 +11,77 @@
         <div class="container">
             <a class="navbar-brand fw-bold" href="/">Sistema Financeiro</a>
             <div>
-                <a href="/relatorios" class="btn btn-outline-light me-2">Relatórios</a>
+                <a href="/" class="btn btn-outline-light me-2">Lançamentos</a>
                 <a href="/logout" class="btn btn-danger">Sair</a>
             </div>
         </div>
     </nav>
 
     <div class="container">
-        <div class="row">
-            <!-- Form de Cadastro -->
-            <div class="col-md-5 mb-4">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <h5 class="card-title mb-0">Nova Transação</h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="formTransacao">
-                            <div class="mb-3">
-                                <label class="form-label">Tipo</label>
-                                <select class="form-select" id="tipo" required onchange="carregarCategorias()">
-                                    <option value="Receita">Receita</option>
-                                    <option value="Despesa" selected>Despesa</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Data</label>
-                                <input type="date" class="form-control" id="data" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Descrição</label>
-                                <input type="text" class="form-control" id="descricao" placeholder="Ex: Supermercado" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Categoria</label>
-                                <select class="form-select" id="categoria" required>
-                                    <!-- Carregado via JS -->
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Valor (R$)</label>
-                                <input type="number" step="0.01" class="form-control" id="valor" placeholder="0.00" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Forma de Pagamento</label>
-                                <select class="form-select" id="forma_pagamento" required>
-                                    <option value="Pix">Pix</option>
-                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                    <option value="Cartão de Débito">Cartão de Débito</option>
-                                    <option value="Dinheiro">Dinheiro</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-success w-100">Salvar Transação</button>
-                        </form>
-                    </div>
-                </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Relatórios de Despesas e Receitas</h2>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-primary" onclick="carregarRelatorio('dia')">Por Dia</button>
+                <button type="button" class="btn btn-outline-primary" onclick="carregarRelatorio('semana')">Por Semana</button>
+                <button type="button" class="btn btn-outline-primary" onclick="carregarRelatorio('mes')">Por Mês</button>
             </div>
+        </div>
 
-            <!-- Tabela de Lançamentos -->
-            <div class="col-md-7 mb-4">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <h5 class="card-title mb-0">Últimos Lançamentos</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Data</th>
-                                        <th>Descrição</th>
-                                        <th>Cat.</th>
-                                        <th>Valor</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabelaTransacoes">
-                                    <!-- Carregado via JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">Resumo Agrupado</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Período</th>
+                                <th>Receitas (R$)</th>
+                                <th>Despesas (R$)</th>
+                                <th>Saldo (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaAgrupada">
+                            <!-- Carregado via JS -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Define data atual no input
-        document.getElementById('data').valueAsDate = new Date();
-
-        let todasCategorias = [];
-
-        async function carregarCategorias() {
-            if (todasCategorias.length === 0) {
-                const res = await fetch('/api/categorias');
-                todasCategorias = await res.json();
-            }
-            const tipoSelecionado = document.getElementById('tipo').value;
-            const selectCategoria = document.getElementById('categoria');
-            selectCategoria.innerHTML = '';
-
-            todasCategorias
-                .filter(c => c.tipo === tipoSelecionado)
-                .forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.nome;
-                    opt.textContent = c.nome;
-                    selectCategoria.appendChild(opt);
-                });
-        }
-
-        async function carregarTransacoes() {
-            const res = await fetch('/api/relatorio?periodo=dia');
+        async function carregarRelatorio(periodo = 'dia') {
+            const res = await fetch(`/api/relatorio?periodo=${periodo}`);
             const data = await res.json();
-            const tbody = document.getElementById('tabelaTransacoes');
+            const tbody = document.getElementById('tabelaAgrupada');
             tbody.innerHTML = '';
 
-            data.detalhado.forEach(t => {
+            if (data.agrupado.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhum registro encontrado.</td></tr>';
+                return;
+            }
+
+            data.agrupado.forEach(row => {
                 const tr = document.createElement('tr');
-                const cor = t.tipo === 'Receita' ? 'text-success' : 'text-danger';
-                const sinal = t.tipo === 'Receita' ? '+' : '-';
-                
+                const receita = parseFloat(row.total_receita || 0);
+                const despesa = parseFloat(row.total_despesa || 0);
+                const saldo = receita - despesa;
+                const corSaldo = saldo >= 0 ? 'text-success' : 'text-danger';
+
                 tr.innerHTML = `
-                    <td>${t.data}</td>
-                    <td>${t.descricao}</td>
-                    <td><small class="badge bg-secondary">${t.categoria}</small></td>
-                    <td class="${cor} fw-bold">${sinal} R$ ${parseFloat(t.valor).toFixed(2)}</td>
-                    <td>
-                        <button onclick="excluirTransacao(${t.id})" class="btn btn-sm btn-outline-danger">X</button>
-                    </td>
+                    <td class="fw-bold">${row.grupo}</td>
+                    <td class="text-success">R$ ${receita.toFixed(2)}</td>
+                    <td class="text-danger">R$ ${despesa.toFixed(2)}</td>
+                    <td class="${corSaldo} fw-bold">R$ ${saldo.toFixed(2)}</td>
                 `;
                 tbody.appendChild(tr);
             });
         }
 
-        document.getElementById('formTransacao').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const dados = {
-                tipo: document.getElementById('tipo').value,
-                data: document.getElementById('data').value,
-                descricao: document.getElementById('descricao').value,
-                categoria: document.getElementById('categoria').value,
-                valor: document.getElementById('valor').value,
-                forma_pagamento: document.getElementById('forma_pagamento').value
-            };
-
-            const res = await fetch('/api/transacoes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(dados)
-            });
-
-            if (res.ok) {
-                document.getElementById('descricao').value = '';
-                document.getElementById('valor').value = '';
-                carregarTransacoes();
-            } else {
-                alert('Erro ao salvar transação.');
-            }
-        });
-
-        async function excluirTransacao(id) {
-            if (confirm('Deseja excluir esta transação?')) {
-                await fetch(`/api/transacoes/${id}`, { method: 'DELETE' });
-                carregarTransacoes();
-            }
-        }
-
-        // Inicialização
-        carregarCategorias();
-        carregarTransacoes();
+        // Carrega relatório por dia como padrão
+        carregarRelatorio('dia');
     </script>
 </body>
 </html>
