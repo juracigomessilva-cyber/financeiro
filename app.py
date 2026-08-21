@@ -2,9 +2,29 @@ import sqlite3
 import shutil
 import os
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_file
+from functools import wraps
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 
 app = Flask(__name__)
+
+# Chave secreta obrigatória para gerenciar a sessão de login
+app.secret_key = 'chave_secreta_financeiro_segura'
+
+# DEFINA A SUA SENHA AQUI
+SENHA_CORRETA = "admin123"
+
+# --- DECORADOR DE PROTEÇÃO DE ROTAS ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logado'):
+            # Se for uma requisição de API (AJAX), retorna erro HTTP 401
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Não autorizado"}), 401
+            # Se for navegação normal, redireciona para a página de login
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def init_db():
     conn = sqlite3.connect('financeiro.db')
@@ -53,17 +73,38 @@ def init_db():
 
 init_db()
 
-# --- ROTAS DE PÁGINAS ---
+# --- ROTAS DE AUTENTICAÇÃO ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    erro = None
+    if request.method == 'POST':
+        senha_digitada = request.form.get('senha')
+        if senha_digitada == SENHA_CORRETA:
+            session['logado'] = True
+            return redirect(url_for('index'))
+        else:
+            erro = "Senha incorreta!"
+    return render_template('login.html', erro=erro)
+
+@app.route('/logout')
+def logout():
+    session.pop('logado', None)
+    return redirect(url_for('login'))
+
+# --- ROTAS DE PÁGINAS PROTEGIDAS ---
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/relatorios')
+@login_required
 def relatorios():
     return render_template('relatorios.html')
 
-# --- APIS DE CATEGORIAS ---
+# --- APIS DE CATEGORIAS PROTEGIDAS ---
 @app.route('/api/categorias', methods=['GET'])
+@login_required
 def listar_categorias():
     conn = sqlite3.connect('financeiro.db')
     conn.row_factory = sqlite3.Row
@@ -73,8 +114,9 @@ def listar_categorias():
     conn.close()
     return jsonify(categorias)
 
-# --- APIS DE TRANSAÇÕES ---
+# --- APIS DE TRANSAÇÕES PROTEGIDAS ---
 @app.route('/api/transacoes', methods=['POST'])
+@login_required
 def salvar_transacao():
     data = request.json
     conn = sqlite3.connect('financeiro.db')
@@ -88,6 +130,7 @@ def salvar_transacao():
     return jsonify({"status": "sucesso"})
 
 @app.route('/api/transacoes/<int:transacao_id>', methods=['DELETE'])
+@login_required
 def excluir_transacao(transacao_id):
     conn = sqlite3.connect('financeiro.db')
     cursor = conn.cursor()
@@ -96,8 +139,9 @@ def excluir_transacao(transacao_id):
     conn.close()
     return jsonify({"status": "sucesso"})
 
-# --- API DE RELATÓRIOS (AGRUPADOS POR DIA, SEMANA OU MÊS) ---
+# --- API DE RELATÓRIOS PROTEGIDA ---
 @app.route('/api/relatorio', methods=['GET'])
+@login_required
 def relatorio_financeiro():
     periodo = request.args.get('periodo', 'dia') # dia, semana, mes
     conn = sqlite3.connect('financeiro.db')
@@ -105,7 +149,6 @@ def relatorio_financeiro():
     cursor = conn.cursor()
 
     if periodo == 'dia':
-        # Agrupa por dia exato (YYYY-MM-DD)
         query_agrupado = '''
             SELECT 
                 data as grupo,
@@ -116,7 +159,6 @@ def relatorio_financeiro():
             ORDER BY data DESC
         '''
     elif periodo == 'semana':
-        # Agrupa pelo ano e número da semana (YYYY-Www)
         query_agrupado = '''
             SELECT 
                 strftime('%Y-W%W', data) as grupo,
@@ -127,7 +169,6 @@ def relatorio_financeiro():
             ORDER BY grupo DESC
         '''
     else:  # mes
-        # Agrupa por ano e mês (YYYY-MM)
         query_agrupado = '''
             SELECT 
                 strftime('%Y-%m', data) as grupo,
@@ -141,15 +182,15 @@ def relatorio_financeiro():
     cursor.execute(query_agrupado)
     agrupado = [dict(row) for row in cursor.fetchall()]
 
-    # Lista de todas as transações recentes
     cursor.execute('SELECT * FROM transacoes ORDER BY data DESC, id DESC LIMIT 100')
     detalhado = [dict(row) for row in cursor.fetchall()]
 
     conn.close()
     return jsonify({'agrupado': agrupado, 'detalhado': detalhado})
 
-# --- BACKUP ---
+# --- BACKUP PROTEGIDO ---
 @app.route('/api/backup', methods=['GET'])
+@login_required
 def fazer_backup():
     if not os.path.exists('backups'):
         os.makedirs('backups')
